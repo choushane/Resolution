@@ -91,6 +91,7 @@
                 <action android:name="com.realtek.app.resolution.action.RESOLUTION" />
                 <action android:name="com.realtek.app.resolution.action.NETWORK" />
                 <action android:name="com.realtek.app.resolution.action.REBOOT" />
+		<action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
     </application>

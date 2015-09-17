@@ -11,10 +11,15 @@ import android.app.Notification;
 import android.app.Notification.InboxStyle;
 import android.app.ProgressDialog;
 import android.os.Bundle;
+import android.os.SystemClock;
 import com.realtek.hardware.RtkHDMIManager;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.io.IOException;
 import android.content.Context;
+
+import java.util.List;
+import java.util.ArrayList;
 
 import android.provider.Settings;
 import android.provider.Settings.SettingNotFoundException;
@@ -39,11 +44,14 @@ public class ToGoReceiver extends BroadcastReceiver {
 	private final static String Resolution = "com.realtek.app.resolution.action.RESOLUTION";
 	private final static String Network = "com.realtek.app.resolution.action.NETWORK";
 	private final static String Reboot = "com.realtek.app.resolution.action.REBOOT";
+	private final static String BOOT_COMPLETED = "android.intent.action.BOOT_COMPLETED";
+
 	private RtkHDMIManager mRtkHDMIManager;
 	private EthernetManager mEthManager;
 	private ConnectivityManager mService;
 	private EthernetDevInfo mInterfaceInfo;
 	private ProgressDialog pd;
+	private List<EthernetDevInfo> mListDevices = new ArrayList<EthernetDevInfo>();
 
 	@Override
 	public void onReceive(Context context, Intent intent) {
@@ -99,21 +107,31 @@ public class ToGoReceiver extends BroadcastReceiver {
 
         	    mEthManager = EthernetManager.getInstance();
 		    EthernetDevInfo saveInfo = mEthManager.getSavedConfig();
+		    mListDevices = mEthManager.getDeviceNameList();
+		    String ifname = "";
 
+	 	    ifname = saveInfo.getIfName();
+		    
 		    if(getprop("qts.net.mode").contains("1")){
 			saveInfo.setConnectMode(EthernetDevInfo.ETHERNET_CONN_MODE_MANUAL);
 		    }else
 			saveInfo.setConnectMode(EthernetDevInfo.ETHERNET_CONN_MODE_DHCP);
 
 		    if(getprop("qts.net.dns").contains("0.0.0.0"))
-			saveInfo.setDnsAddr("8.8.8.8");
+			    saveInfo.setDnsAddr("8.8.8.8");
 		    else
-			saveInfo.setDnsAddr(getprop("qts.net.dns"));
+			    saveInfo.setDnsAddr(getprop("qts.net.dns"));
 
 		    saveInfo.setIpAddress(getprop("qts.net.ipaddr"));
-	 	    saveInfo.setGateWay(getprop("qts.net.gateway"));
+		    saveInfo.setGateWay(getprop("qts.net.gateway"));
 		    saveInfo.setNetMask(getprop("qts.net.netmask"));
-		    saveInfo.setHwaddr(getprop("qts.net.hwaddr"));
+
+		    if(mListDevices != null)
+			for(EthernetDevInfo deviceinfo : mListDevices)
+			    if(deviceinfo.getIfName().equals(ifname))
+				saveInfo.setHwaddr(deviceinfo.getHwaddr());
+			    else
+				saveInfo.setHwaddr(getprop("qts.net.hwaddr"));
 
 		    mEthManager.updateDevInfo(saveInfo);
 		}else if(Reboot.equals(intent.getAction()))
@@ -124,6 +142,8 @@ public class ToGoReceiver extends BroadcastReceiver {
 		    pd.setTitle(context.getString(com.android.internal.R.string.power_off));
 		    pd.setMessage(context.getString(com.android.internal.R.string.shutdown_progress));
 		    pd.show();
+		} else if (BOOT_COMPLETED.equals(intent.getAction())) {
+		    setContentResolution(context);
 		}	
     }
 
@@ -144,5 +164,50 @@ public class ToGoReceiver extends BroadcastReceiver {
 		}
 		return output.toString();
 	}
-}
 
+	private void setContentResolution(Context context) {
+	    String lcd_density = UseProp.getProp("ro.sf.lcd_density", "");
+	    int theatherMode = 160;
+	    if (Integer.parseInt(lcd_density) != theatherMode) {
+		OptimizingDialog(context);
+		SystemClock.sleep(3000);
+		final String command = "/system/bin/720.sh";
+	
+
+		new Thread(new Runnable() {
+
+		    @Override
+		    public void run() {
+			try {
+			    Process process = Runtime.getRuntime().exec(command);
+			    BufferedReader reader = new BufferedReader(
+				new InputStreamReader(process.getInputStream()));
+			    int read;
+			    char[] buffer = new char[4096];
+			    StringBuffer output = new StringBuffer();
+			    while ((read = reader.read(buffer)) > 0) {
+				output.append(buffer, 0, read);
+			}
+			reader.close();
+			// Waits for the command to finish.
+			process.waitFor();
+
+			} catch (IOException e) {
+			    throw new RuntimeException(e);
+			} catch (InterruptedException e) {
+			    throw new RuntimeException(e);
+			}
+		    }
+		}).start();
+	    }
+	}
+
+	private void OptimizingDialog(Context context) {
+	    pd = new ProgressDialog(context);
+	    pd.getWindow().setType(WindowManager.LayoutParams.TYPE_SYSTEM_ALERT);
+	    pd.setCancelable(false);
+	    pd.setTitle(context.getString(R.string.optimizing_title));
+	    pd.setMessage(context.getString(R.string.optimizing_msg));
+	    pd.show();
+	}
+}

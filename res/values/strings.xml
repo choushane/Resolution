@@ -14,5 +14,7 @@
     <string name="stop_client_0">Stop Client 0</string>
     <string name="stop_client_1">Stop Client 1</string>
     <string name="config_out_to_file">Config Out to File</string>
+    <string name="optimizing_title">Optimizing</string>
+    <string name="optimizing_msg">Optimizing…</string>
 
 </resources>
